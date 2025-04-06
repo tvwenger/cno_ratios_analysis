@@ -14,7 +14,7 @@ import bayes_spec
 import bayes_cn_hfs
 
 from bayes_spec import SpecData, Optimize
-from bayes_cn_hfs import CNRatioModel
+from bayes_cn_hfs import CNModel, CNRatioModel
 
 flux_density_dict = {  # in Jy
     "G005.885": 7.44e0,
@@ -63,6 +63,7 @@ def main(source):
     result = {
         "source": source,
         "exception": "",
+        "opt_results": {},
         "results": {},
     }
 
@@ -113,6 +114,7 @@ def main(source):
         xlabel=r"LSRK Frequency (MHz)",
         ylabel=r"$T_{B,\,^{13}\rm CN}$ (K)",
     )
+    data_12CN = {"12CN_1": obs_12CN_1, "12CN_2": obs_12CN_2}
     data = {"12CN_1": obs_12CN_1, "12CN_2": obs_12CN_2, "13CN": obs_13CN}
 
     # Estimate background temperature
@@ -152,23 +154,21 @@ def main(source):
     try:
         # Initialize optimizer
         opt = Optimize(
-            CNRatioModel,  # model definition
-            data,  # data dictionary
-            max_n_clouds=10,  # maximum number of clouds
+            CNModel,  # model definition
+            data_12CN,  # data dictionary
+            max_n_clouds=8,  # maximum number of clouds
             baseline_degree=0,  # polynomial baseline degree
             bg_temp=hii_temp + 2.7,  # CMB + HII region
             Beff=1.0,  # beam efficiency
             Feff=1.0,  # forward efficiency
-            mol_data_12CN=mol_data_12CN,  # molecular data
-            mol_data_13CN=mol_data_13CN,  # molecular data
+            mol_data=mol_data_12CN,  # molecular data
             seed=1234,  # random seed
             verbose=True,  # verbosity
         )
 
         # Define each model
         opt.add_priors(
-            prior_log10_N_12CN=[13.5, 1.0],  # cm-2
-            prior_ratio_12C_13C=[75.0, 25.0],
+            prior_log10_N=[13.5, 1.0],  # cm-2
             prior_log10_Tkin=None,  # ignored
             prior_velocity=[vlsr, 5.0],  # km s-1
             prior_fwhm_nonthermal=1.0,  # km s-1
@@ -177,9 +177,8 @@ def main(source):
             prior_baseline_coeffs=None,  # use default baseline priors
             assume_LTE=False,  # do not assume LTE
             prior_log10_Tex=[0.5, 0.1],  # K
-            assume_CTEX_12CN=False,  # do not assume CTEX
+            assume_CTEX=False,  # do not assume CTEX
             prior_LTE_precision=100.0,  # width of LTE precision prior
-            assume_CTEX_13CN=False,  # do not assume CTEX for 13CN
             fix_log10_Tkin=1.5,  # kinetic temperature is fixed (K)
             ordered=False,  # do not assume optically-thin
         )
@@ -188,7 +187,7 @@ def main(source):
         # optimize
         fit_kwargs = {
             "rel_tolerance": 0.01,
-            "abs_tolerance": 0.12,
+            "abs_tolerance": 0.1,
             "learning_rate": 0.02,
         }
         sample_kwargs = {
@@ -207,9 +206,9 @@ def main(source):
         )
 
         # save BICs and results for each model
-        results = {0: {"bic": opt.best_model.null_bic()}}
+        opt_results = {0: {"bic": opt.best_model.null_bic()}}
         for n_gauss, model in opt.models.items():
-            results[n_gauss] = {"bic": np.inf, "solutions": {}}
+            opt_results[n_gauss] = {"bic": np.inf, "solutions": {}}
             for solution in model.solutions:
                 # get BIC
                 bic = model.bic(solution=solution)
@@ -220,8 +219,8 @@ def main(source):
                 # check convergence
                 converged = summary["r_hat"].max() < 1.05
 
-                if converged and bic < results[n_gauss]["bic"]:
-                    results[n_gauss]["bic"] = bic
+                if converged and bic < opt_results[n_gauss]["bic"]:
+                    opt_results[n_gauss]["bic"] = bic
 
                 # save posterior samples for un-normalized params (except baseline)
                 data_vars = list(model.trace[f"solution_{solution}"].data_vars)
@@ -232,7 +231,7 @@ def main(source):
                 ]
 
                 # only save posterior samples if converged
-                results[n_gauss]["solutions"][solution] = {
+                opt_results[n_gauss]["solutions"][solution] = {
                     "bic": bic,
                     "summary": summary,
                     "converged": converged,
@@ -244,7 +243,98 @@ def main(source):
                         else None
                     ),
                 }
+        result["opt_results"] = opt_results
+
+        # Initialize model
+        model = CNRatioModel(
+            data,  # data dictionary
+            n_clouds=opt.best_model.n_clouds,
+            baseline_degree=0,  # polynomial baseline degree
+            bg_temp=hii_temp + 2.7,  # CMB + HII region
+            Beff=1.0,  # beam efficiency
+            Feff=1.0,  # forward efficiency
+            mol_data_12CN=mol_data_12CN,  # molecular data
+            mol_data_13CN=mol_data_13CN,  # molecular data
+            seed=1234,  # random seed
+            verbose=True,  # verbosity
+        )
+
+        # Add priors
+        model.add_priors(
+            prior_log10_N_12CN=[13.5, 1.0],  # cm-2
+            prior_ratio_12C_13C=[75.0, 25.0],
+            prior_log10_Tkin=None,  # ignored
+            prior_velocity=[vlsr, 5.0],  # km s-1
+            prior_fwhm_nonthermal=1.0,  # km s-1
+            prior_fwhm_L=None,  # assume Gaussian line profile
+            prior_rms=None,  # do not infer spectral rms
+            prior_baseline_coeffs=None,  # use default baseline priors
+            assume_LTE=False,  # do not assume LTE
+            prior_log10_Tex=[0.5, 0.1],  # K
+            assume_CTEX_12CN=False,  # do not assume CTEX
+            prior_LTE_precision=100.0,  # width of LTE precision prior
+            assume_CTEX_13CN=True,  # assume CTEX for 13CN
+            fix_log10_Tkin=1.5,  # kinetic temperature is fixed (K)
+            ordered=False,  # do not assume optically-thin
+        )
+
+        # Add likelihood
+        model.add_likelihood()
+
+        # fit
+        fit_kwargs = {
+            "rel_tolerance": 0.01,
+            "abs_tolerance": 0.12,
+            "learning_rate": 0.02,
+        }
+        sample_kwargs = {
+            "chains": 8,
+            "cores": 8,
+            "tune": 1000,
+            "draws": 1000,
+            "init_kwargs": fit_kwargs,
+            "nuts_kwargs": {"target_accept": 0.8},
+        }
+        model.sample(init="advi+adapt_diag", **sample_kwargs)
+        model.solve(kl_div_threshold=0.1)
+
+        results = {"bic": np.inf, "solutions": {}}
+        for solution in model.solutions:
+            # get BIC
+            bic = model.bic(solution=solution)
+
+            # get summary
+            summary = pm.summary(model.trace[f"solution_{solution}"])
+
+            # check convergence
+            converged = summary["r_hat"].max() < 1.05
+
+            if converged and bic < results["bic"]:
+                results["bic"] = bic
+
+            # save posterior samples for un-normalized params (except baseline)
+            data_vars = list(model.trace[f"solution_{solution}"].data_vars)
+            data_vars = [
+                data_var
+                for data_var in data_vars
+                if ("baseline" in data_var) or not ("norm" in data_var)
+            ]
+
+            # only save posterior samples if converged
+            results["solutions"][solution] = {
+                "bic": bic,
+                "summary": summary,
+                "converged": converged,
+                "trace": (
+                    model.trace[f"solution_{solution}"][data_vars].sel(
+                        draw=slice(None, None, 10)
+                    )
+                    if converged
+                    else None
+                ),
+            }
         result["results"] = results
+
         return result
 
     except Exception as ex:
