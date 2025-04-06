@@ -19,8 +19,10 @@ transfer_output_remaps = "$(source)_results.pkl = $(dir)/results/$(source)_resul
 
 # Logging
 log = $(dir)/logs/bayes_cn_hfs_$(Cluster)_$(Process).log
-error = $(dir)/logs/bayes_cn_hfs_$(Cluster)_$(Process).err
+error = $(dir)/logs/bayes_cn_hfs_$(Cluster)_$(Process).out
 output = $(dir)/logs/bayes_cn_hfs_$(Cluster)_$(Process).out
+stream_output = True
+stream_error = True
 
 # Resource request
 request_cpus = 8
