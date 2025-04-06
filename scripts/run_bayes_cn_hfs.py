@@ -156,7 +156,7 @@ def main(source):
         opt = Optimize(
             CNModel,  # model definition
             data_12CN,  # data dictionary
-            max_n_clouds=8,  # maximum number of clouds
+            max_n_clouds=5,  # maximum number of clouds
             baseline_degree=0,  # polynomial baseline degree
             bg_temp=hii_temp + 2.7,  # CMB + HII region
             Beff=1.0,  # beam efficiency

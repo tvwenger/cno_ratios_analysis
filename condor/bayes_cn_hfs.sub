@@ -1,7 +1,7 @@
 # HTC Submit File
 # bayes_cn_hfs analysis of ALMA data
 
-dir = /home/twenger2/condor_ratios_analysis
+dir = /home/twenger2/cno_ratios_analysis
 
 # Container
 requirements = (HasCHTCStaging == true)
