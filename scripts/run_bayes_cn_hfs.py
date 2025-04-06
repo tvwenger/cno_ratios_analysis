@@ -191,8 +191,8 @@ def main(source):
             "learning_rate": 0.02,
         }
         sample_kwargs = {
-            "chains": 8,
-            "cores": 8,
+            "chains": 9,
+            "cores": 9,
             "tune": 1000,
             "draws": 1000,
             "init_kwargs": fit_kwargs,
@@ -288,8 +288,8 @@ def main(source):
             "learning_rate": 0.02,
         }
         sample_kwargs = {
-            "chains": 8,
-            "cores": 8,
+            "chains": 9,
+            "cores": 9,
             "tune": 1000,
             "draws": 1000,
             "init_kwargs": fit_kwargs,
