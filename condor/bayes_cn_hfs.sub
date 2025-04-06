@@ -1,28 +1,30 @@
 # HTC Submit File
 # bayes_cn_hfs analysis of ALMA data
 
+dir = /home/twenger2/condor_ratios_analysis
+
 # Container
 requirements = (HasCHTCStaging == true)
 container_image = file:///staging/twenger2/bayes_cn_hfs-1.1.2a.sif
 
 # Executable
-executable = /home/twenger2/cno_ratios/condor/run_bayes_cn_hfs.sh
+executable = $(dir)/condor/run_bayes_cn_hfs.sh
 arguments = $(source)
 
 # Data handling
 should_transfer_files = YES
 when_to_transfer_output = ON_EXIT
-transfer_input_files = /home/twenger2/cno_ratios/scripts/run_bayes_cn_hfs.py,/home/twenger2/cno_ratios/alma_spectra/targets.csv,/home/twenger2/cno_ratios/alma_spectra/mol_data_12CN.pkl,/home/twenger2/cno_ratios/alma_spectra/mol_data_13CN.pkl,/home/twenger2/cno_ratios/alma_spectra/$(source)_feather_CN.tsv,/home/twenger2/cno_ratios/alma_spectra/$(source)_feather_cont1.tsv,/home/twenger2/cno_ratios/alma_spectra/$(source)_feather_13CN.tsv
-transfer_output_remaps = "$(source)_results.pkl = /home/twenger2/cno_ratios/results/$(source)_results.pkl"
+transfer_input_files = $(dir)/scripts/run_bayes_cn_hfs.py,$(dir)/alma_spectra/targets.csv,$(dir)/alma_spectra/mol_data_12CN.pkl,$(dir)/alma_spectra/mol_data_13CN.pkl,$(dir)/alma_spectra/$(source)_feather_CN.tsv,$(dir)/alma_spectra/$(source)_feather_cont1.tsv,$(dir)/alma_spectra/$(source)_feather_13CN.tsv
+transfer_output_remaps = "$(source)_results.pkl = $(dir)/results/$(source)_results.pkl"
 
 # Logging
-log = /home/twenger2/cno_ratios/logs/bayes_cn_hfs_$(Cluster)_$(Process).log
-error = /home/twenger2/cno_ratios/logs/bayes_cn_hfs_$(Cluster)_$(Process).err
-output = /home/twenger2/cno_ratios/logs/bayes_cn_hfs_$(Cluster)_$(Process).out
+log = $(dir)/logs/bayes_cn_hfs_$(Cluster)_$(Process).log
+error = $(dir)/logs/bayes_cn_hfs_$(Cluster)_$(Process).err
+output = $(dir)/logs/bayes_cn_hfs_$(Cluster)_$(Process).out
 
 # Resource request
 request_cpus = 8
 request_memory = 8GB
 request_disk = 64GB
 
-queue source from /home/twenger2/cno_ratios/alma_spectra/all_sources.txt
+queue source from $(dir)/alma_spectra/all_sources.txt
