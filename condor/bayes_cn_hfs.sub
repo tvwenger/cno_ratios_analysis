@@ -23,12 +23,10 @@ error = $(dir)/logs/bayes_cn_hfs_$(Cluster)_$(Process).err
 output = $(dir)/logs/bayes_cn_hfs_$(Cluster)_$(Process).out
 stream_output = True
 stream_error = True
-buffer_size = 1
-buffer_block_size = 1
 
 # Resource request
-request_cpus = 10
-request_memory = 8GB
+request_cpus = 12
+request_memory = 16GB
 request_disk = 64GB
 
 queue source from $(dir)/alma_spectra/all_sources.txt
