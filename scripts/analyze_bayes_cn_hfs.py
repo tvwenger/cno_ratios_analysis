@@ -79,10 +79,10 @@ def main(source, datadir="alma_spectra/", resultsdir="results/"):
         os.mkdir(outdir)
 
     # load mol_data
-    # with open(os.path.join(datadir, "mol_data_12CN.pkl"), "rb") as f:
-    #     mol_data_12CN = pickle.load(f)
-    # with open(os.path.join(datadir, "mol_data_13CN.pkl"), "rb") as f:
-    #     mol_data_13CN = pickle.load(f)
+    with open(os.path.join(datadir, "mol_data_12CN.pkl"), "rb") as f:
+        mol_data_12CN = pickle.load(f)
+    with open(os.path.join(datadir, "mol_data_13CN.pkl"), "rb") as f:
+        mol_data_13CN = pickle.load(f)
 
     # load data
     data_12CN_1 = np.genfromtxt(os.path.join(datadir, f"{source}_feather_CN.tsv"))
@@ -191,7 +191,7 @@ def main(source, datadir="alma_spectra/", resultsdir="results/"):
 
     # Plot CNModel predictive samples
     for n_cloud in n_clouds:
-        if n_cloud == 0:
+        if not np.isfinite(bics[n_cloud-1]):
             continue
 
         model = CNModel(
@@ -201,7 +201,7 @@ def main(source, datadir="alma_spectra/", resultsdir="results/"):
             bg_temp=hii_temp + 2.7,  # CMB + HII region
             Beff=1.0,  # beam efficiency
             Feff=1.0,  # forward efficiency
-            # mol_data=mol_data_12CN,  # molecular data
+            mol_data=mol_data_12CN,  # molecular data
             seed=1234,  # random seed
             verbose=True,  # verbosity
         )
@@ -289,11 +289,11 @@ def main(source, datadir="alma_spectra/", resultsdir="results/"):
             axes = plots.plot_predictive(model.data, posterior.posterior_predictive)
             """
             thin = 10
-            posterior_predictive = {"12CN_1": [], "12CN_2": []}
+            posterior_predictive = {"12CN": []}
             trace = az.extract(model.trace.posterior)
             for sample in trace.sample[::thin]:
                 trace_sample = trace.sel(sample=sample)
-                sim_params_12CN_1 = {
+                sim_params_12CN = {
                     key: trace_sample[key].data
                     for key in [
                         "log10_N",
@@ -301,42 +301,20 @@ def main(source, datadir="alma_spectra/", resultsdir="results/"):
                         "velocity",
                         "log10_Tex_ul",
                         "weights",
-                        "baseline_12CN_1_norm",
-                    ]
-                }
-                sim_params_12CN_2 = {
-                    key: trace_sample[key].data
-                    for key in [
-                        "log10_N",
-                        "fwhm_nonthermal",
-                        "velocity",
-                        "log10_Tex_ul",
-                        "weights",
-                        "baseline_12CN_2_norm",
+                        "baseline_12CN_norm",
                     ]
                 }
                 for key in posterior_predictive.keys():
-                    if key == "12CN_1":
-                        posterior_predictive[key].append(
-                            model.model[key].eval(sim_params_12CN_1, on_unused_input="ignore")
-                            + np.random.normal(loc=0.0, scale=model.data[key].noise)
-                        )
-                    if key == "12CN_2":
-                        posterior_predictive[key].append(
-                            model.model[key].eval(sim_params_12CN_2, on_unused_input="ignore")
-                            + np.random.normal(loc=0.0, scale=model.data[key].noise)
-                        )
-            fig, axes = plt.subplots(2, layout="constrained")
-            axes[0].plot(obs_12CN_1.spectral, obs_12CN_1.brightness, "k-")
-            for predictive in posterior_predictive["12CN_1"]:
-                axes[0].plot(obs_12CN_1.spectral, predictive, "r-", alpha=0.1)
-            axes[0].set_xlabel("LSRK Frequency (MHz)")
-            axes[0].set_ylabel(r"$T_B$ (K)")
-            axes[1].plot(obs_12CN_2.spectral, obs_12CN_2.brightness, "k-")
-            for predictive in posterior_predictive["12CN_2"]:
-                axes[1].plot(obs_12CN_2.spectral, predictive, "r-", alpha=0.1)
-            axes[1].set_xlabel("LSRK Frequency (MHz)")
-            axes[1].set_ylabel(r"$T_B$ (K)")
+                    posterior_predictive[key].append(
+                        model.model[key].eval(sim_params_12CN, on_unused_input="ignore")
+                        + np.random.normal(loc=0.0, scale=model.data[key].noise)
+                    )
+            fig, ax = plt.subplots(1, layout="constrained")
+            ax.plot(obs_12CN_1.spectral, obs_12CN_1.brightness, "k-")
+            for predictive in posterior_predictive["12CN"]:
+                ax.plot(obs_12CN_1.spectral, predictive, "r-", alpha=0.1)
+            ax.set_xlabel("LSRK Frequency (MHz)")
+            ax.set_ylabel(r"$T_B$ (K)")
             fig.savefig(
                 os.path.join(outdir, f"{source}_CN_{n_cloud}_posterior_predictive.pdf"),
                 bbox_inches="tight",
@@ -344,27 +322,17 @@ def main(source, datadir="alma_spectra/", resultsdir="results/"):
             plt.close(fig)
 
             # plot posterior predictive residuals
-            fig, axes = plt.subplots(2, layout="constrained")
-            axes[0].plot(obs_12CN_1.spectral, np.zeros_like(obs_12CN_1.brightness), "k-")
-            for predictive in posterior_predictive["12CN_1"]:
-                axes[0].plot(
+            fig, ax = plt.subplots(1, layout="constrained")
+            ax.plot(obs_12CN_1.spectral, np.zeros_like(obs_12CN_1.brightness), "k-")
+            for predictive in posterior_predictive["12CN"]:
+                ax.plot(
                     obs_12CN_1.spectral,
                     obs_12CN_1.brightness - predictive,
                     "r-",
                     alpha=0.1,
                 )
-            axes[0].set_xlabel("LSRK Frequency (MHz)")
-            axes[0].set_ylabel(r"$T_B$ (K)")
-            axes[1].plot(obs_12CN_2.spectral, np.zeros_like(obs_12CN_2.brightness), "k-")
-            for predictive in posterior_predictive["12CN_2"]:
-                axes[1].plot(
-                    obs_12CN_2.spectral,
-                    obs_12CN_2.brightness - predictive,
-                    "r-",
-                    alpha=0.1,
-                )
-            axes[1].set_xlabel("LSRK Frequency (MHz)")
-            axes[1].set_ylabel(r"$T_B$ (K)")
+            ax.set_xlabel("LSRK Frequency (MHz)")
+            ax.set_ylabel(r"$T_B$ (K)")
             fig.savefig(
                 os.path.join(
                     outdir, f"{source}_CN_{n_cloud}_posterior_predictive_residuals.pdf"
@@ -386,8 +354,8 @@ def main(source, datadir="alma_spectra/", resultsdir="results/"):
             bg_temp=hii_temp + 2.7,  # CMB + HII region
             Beff=1.0,  # beam efficiency
             Feff=1.0,  # forward efficiency
-            #mol_data_12CN=mol_data_12CN,  # molecular data
-            #mol_data_13CN=mol_data_13CN,  # molecular data
+            mol_data_12CN=mol_data_12CN,  # molecular data
+            mol_data_13CN=mol_data_13CN,  # molecular data
             seed=1234,  # random seed
             verbose=True,  # verbosity
         )
