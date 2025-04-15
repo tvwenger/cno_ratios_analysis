@@ -5,7 +5,7 @@ dir = /home/twenger2/cno_ratios_analysis
 
 # Container
 requirements = (HasCHTCStaging == true)
-container_image = file:///staging/twenger2/bayes_cn_hfs-1.1.2a.sif
+container_image = file:///staging/twenger2/bayes_cn_hfs-1.1.3.sif
 
 # Executable
 executable = $(dir)/condor/run_bayes_cn_hfs.sh
@@ -26,7 +26,7 @@ stream_error = True
 
 # Resource request
 request_cpus = 12
-request_memory = 16GB
-request_disk = 64GB
+request_memory = 4GB
+request_disk = 4GB
 
 queue source from $(dir)/alma_spectra/all_sources.txt

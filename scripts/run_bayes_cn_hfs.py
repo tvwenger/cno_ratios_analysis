@@ -251,6 +251,7 @@ def main(source):
             if n_clouds < 1:
                 continue
 
+            print(f"CNRatioModel with n_clouds = {n_clouds}")
             model = CNRatioModel(
                 data,  # data dictionary
                 n_clouds=n_clouds,
@@ -295,7 +296,7 @@ def main(source):
             sample_kwargs = {
                 "chains": 12,
                 "cores": 12,
-                "tune": 1000,
+                "tune": 2000,
                 "draws": 1000,
                 "init_kwargs": fit_kwargs,
                 "nuts_kwargs": {"target_accept": 0.8},
@@ -312,6 +313,7 @@ def main(source):
             for solution in model.solutions:
                 # get BIC
                 bic = model.bic(solution=solution)
+                print(f"n_clouds = {n_clouds} solution = {solution} BIC = {bic:.3e}")
 
                 # get summary
                 summary = pm.summary(model.trace[f"solution_{solution}"])
@@ -339,6 +341,7 @@ def main(source):
                     ),
                 }
             result[f"results_{n_clouds}"] = results
+            print()
         return result
 
     except Exception as ex:
