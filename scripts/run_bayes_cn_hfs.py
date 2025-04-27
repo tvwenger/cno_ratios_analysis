@@ -178,41 +178,38 @@ def main(source):
             assume_LTE=False,  # do not assume LTE
             prior_log10_Tex=[0.5, 0.25],  # K
             assume_CTEX=False,  # do not assume CTEX
-            prior_LTE_precision=100.0,  # width of LTE precision prior
-            fix_log10_Tkin=1.5,  # kinetic temperature is fixed (K)
+            prior_log10_LTE_precision=[-6.0, 1.0],
+            fix_log10_Tkin=0.5,  # kinetic temperature is fixed (K)
             ordered=False,  # do not assume optically-thin
         )
         opt.add_likelihood()
 
         # optimize
         fit_kwargs = {
-            "rel_tolerance": 0.01,
-            "abs_tolerance": 0.1,
-            "learning_rate": 0.02,
+            "rel_tolerance": 0.05,
+            "abs_tolerance": 0.05,
+            "learning_rate": 0.01,
         }
         sample_kwargs = {
-            "chains": 12,
-            "cores": 12,
+            "chains": 8,
+            "cores": 8,
             "tune": 1000,
             "draws": 1000,
             "init_kwargs": fit_kwargs,
-            "nuts_kwargs": {"target_accept": 0.8},
+            "nuts_kwargs": {"target_accept": 0.9},
         }
         opt.optimize(
-            bic_threshold=10.0,
+            bic_threshold=150.0,
             sample_kwargs=sample_kwargs,
             fit_kwargs=fit_kwargs,
             approx=False,
+            start_spread={"velocity_norm": [-3.0, 3.0]},
         )
 
         # save BICs and results for each model
         opt_results = {0: {"bic": opt.best_model.null_bic()}}
         for n_gauss, model in opt.models.items():
             opt_results[n_gauss] = {"bic": np.inf, "solutions": {}}
-
-            # catch no solutions
-            if model.solutions is None:
-                continue
 
             for solution in model.solutions:
                 # get BIC
@@ -245,8 +242,8 @@ def main(source):
                 }
         result["opt_results"] = opt_results
 
-        # Initialize model with 'best'-2, 'best'-1, and 'best' n_clouds
-        for n_clouds_offset in [2, 1, 0]:
+        # Initialize model with 'best'-1, 'best', and 'best'+1 n_clouds
+        for n_clouds_offset in [1, 0, -1]:
             n_clouds = opt.best_model.n_clouds - n_clouds_offset
             if n_clouds < 1:
                 continue
@@ -268,7 +265,7 @@ def main(source):
             # Add priors
             model.add_priors(
                 prior_log10_N_12CN=[13.5, 1.0],  # cm-2
-                prior_ratio_12C_13C=[50.0, 50.0],
+                prior_ratio_13C_12C=0.1,
                 prior_log10_Tkin=None,  # ignored
                 prior_velocity=[vlsr, 10.0],  # km s-1
                 prior_fwhm_nonthermal=1.0,  # km s-1
@@ -278,9 +275,9 @@ def main(source):
                 assume_LTE=False,  # do not assume LTE
                 prior_log10_Tex=[0.5, 0.25],  # K
                 assume_CTEX_12CN=False,  # do not assume CTEX
-                prior_LTE_precision=100.0,  # width of LTE precision prior
+                prior_log10_LTE_precision=[-6.0, 1.0],
                 assume_CTEX_13CN=True,  # assume CTEX for 13CN
-                fix_log10_Tkin=1.5,  # kinetic temperature is fixed (K)
+                fix_log10_Tkin=0.5,  # kinetic temperature is fixed (K)
                 ordered=False,  # do not assume optically-thin
             )
 
@@ -289,26 +286,23 @@ def main(source):
 
             # fit
             fit_kwargs = {
-                "rel_tolerance": 0.01,
-                "abs_tolerance": 0.12,
-                "learning_rate": 0.02,
+                "rel_tolerance": 0.05,
+                "abs_tolerance": 0.05,
+                "learning_rate": 0.01,
+                "start": {"velocity_norm": np.linspace(-3.0, 3.0, n_clouds)},
             }
             sample_kwargs = {
-                "chains": 12,
-                "cores": 12,
-                "tune": 2000,
+                "chains": 8,
+                "cores": 8,
+                "tune": 1000,
                 "draws": 1000,
                 "init_kwargs": fit_kwargs,
-                "nuts_kwargs": {"target_accept": 0.8},
+                "nuts_kwargs": {"target_accept": 0.9},
             }
             model.sample(init="advi+adapt_diag", **sample_kwargs)
             model.solve(kl_div_threshold=0.1)
 
             results = {"bic": np.inf, "solutions": {}}
-
-            # skip no solutions
-            if model.solutions is None:
-                continue
 
             for solution in model.solutions:
                 # get BIC
