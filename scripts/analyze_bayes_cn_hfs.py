@@ -79,10 +79,10 @@ def main(source, datadir="alma_spectra/", resultsdir="results/"):
         os.mkdir(outdir)
 
     # load mol_data
-    # with open(os.path.join(datadir, "mol_data_12CN.pkl"), "rb") as f:
-    #     mol_data_12CN = pickle.load(f)
-    # with open(os.path.join(datadir, "mol_data_13CN.pkl"), "rb") as f:
-    #     mol_data_13CN = pickle.load(f)
+    with open(os.path.join(datadir, "mol_data_12CN.pkl"), "rb") as f:
+        mol_data_12CN = pickle.load(f)
+    with open(os.path.join(datadir, "mol_data_13CN.pkl"), "rb") as f:
+        mol_data_13CN = pickle.load(f)
 
     # load data
     data_12CN_1 = np.genfromtxt(os.path.join(datadir, f"{source}_feather_CN.tsv"))
@@ -123,8 +123,7 @@ def main(source, datadir="alma_spectra/", resultsdir="results/"):
         xlabel=r"LSRK Frequency (MHz)",
         ylabel=r"$T_{B,\,^{13}\rm CN}$ (K)",
     )
-    data_12CN = {"12CN_1": obs_12CN_1, "12CN_2": obs_12CN_2}
-    data_12CN_no_cont = {"12CN_1": obs_12CN_1}
+    data_12CN = {"12CN": obs_12CN_1}
     data = {"12CN_1": obs_12CN_1, "12CN_2": obs_12CN_2, "13CN": obs_13CN}
 
     # Estimate background temperature
@@ -192,17 +191,17 @@ def main(source, datadir="alma_spectra/", resultsdir="results/"):
 
     # Plot CNModel predictive samples
     for n_cloud in n_clouds:
-        if n_cloud == 0:
+        if not np.isfinite(bics[n_cloud-1]):
             continue
 
         model = CNModel(
-            data_12CN_no_cont,  # data dictionary
+            data_12CN,  # data dictionary
             n_clouds=n_cloud,  # number of clouds
             baseline_degree=0,  # polynomial baseline degree
             bg_temp=hii_temp + 2.7,  # CMB + HII region
             Beff=1.0,  # beam efficiency
             Feff=1.0,  # forward efficiency
-            # mol_data=mol_data_12CN,  # molecular data
+            mol_data=mol_data_12CN,  # molecular data
             seed=1234,  # random seed
             verbose=True,  # verbosity
         )
@@ -215,7 +214,7 @@ def main(source, datadir="alma_spectra/", resultsdir="results/"):
             prior_rms=None,  # do not infer spectral rms
             prior_baseline_coeffs=None,  # use default baseline priors
             assume_LTE=False,  # do not assume LTE
-            prior_log10_Tex=[0.5, 0.1],  # K
+            prior_log10_Tex=[0.5, 0.25],  # K
             assume_CTEX=False,  # do not assume CTEX
             prior_LTE_precision=100.0,  # width of LTE precision prior
             fix_log10_Tkin=1.5,  # kinetic temperature is fixed (K)
@@ -290,30 +289,191 @@ def main(source, datadir="alma_spectra/", resultsdir="results/"):
             axes = plots.plot_predictive(model.data, posterior.posterior_predictive)
             """
             thin = 10
-            posterior_predictive = {"12CN_1": [], "12CN_2": []}
+            posterior_predictive = {"12CN": []}
+            trace = az.extract(model.trace.posterior)
+            for sample in trace.sample[::thin]:
+                trace_sample = trace.sel(sample=sample)
+                sim_params_12CN = {
+                    key: trace_sample[key].data
+                    for key in [
+                        "log10_N",
+                        "fwhm_nonthermal",
+                        "velocity",
+                        "log10_Tex_ul",
+                        "weights",
+                        "baseline_12CN_norm",
+                    ]
+                }
+                for key in posterior_predictive.keys():
+                    posterior_predictive[key].append(
+                        model.model[key].eval(sim_params_12CN, on_unused_input="ignore")
+                        + np.random.normal(loc=0.0, scale=model.data[key].noise)
+                    )
+            fig, ax = plt.subplots(1, layout="constrained")
+            ax.plot(obs_12CN_1.spectral, obs_12CN_1.brightness, "k-")
+            for predictive in posterior_predictive["12CN"]:
+                ax.plot(obs_12CN_1.spectral, predictive, "r-", alpha=0.1)
+            ax.set_xlabel("LSRK Frequency (MHz)")
+            ax.set_ylabel(r"$T_B$ (K)")
+            fig.savefig(
+                os.path.join(outdir, f"{source}_CN_{n_cloud}_posterior_predictive.pdf"),
+                bbox_inches="tight",
+            )
+            plt.close(fig)
+
+            # plot posterior predictive residuals
+            fig, ax = plt.subplots(1, layout="constrained")
+            ax.plot(obs_12CN_1.spectral, np.zeros_like(obs_12CN_1.brightness), "k-")
+            for predictive in posterior_predictive["12CN"]:
+                ax.plot(
+                    obs_12CN_1.spectral,
+                    obs_12CN_1.brightness - predictive,
+                    "r-",
+                    alpha=0.1,
+                )
+            ax.set_xlabel("LSRK Frequency (MHz)")
+            ax.set_ylabel(r"$T_B$ (K)")
+            fig.savefig(
+                os.path.join(
+                    outdir, f"{source}_CN_{n_cloud}_posterior_predictive_residuals.pdf"
+                ),
+                bbox_inches="tight",
+            )
+            plt.close(fig)
+    
+    # Plot 'best' n_clouds - 2, 'best' n_clouds - 1, 'best' n_clouds
+    for n_clouds_offset in [2,1,0]:
+        n_clouds_input = n_clouds[np.argmin(bics)] - n_clouds_offset
+        if n_clouds_input < 1:
+            continue
+
+        model = CNRatioModel(
+            data,  # data dictionary
+            n_clouds=n_clouds_input,
+            baseline_degree=0,  # polynomial baseline degree
+            bg_temp=hii_temp + 2.7,  # CMB + HII region
+            Beff=1.0,  # beam efficiency
+            Feff=1.0,  # forward efficiency
+            mol_data_12CN=mol_data_12CN,  # molecular data
+            mol_data_13CN=mol_data_13CN,  # molecular data
+            seed=1234,  # random seed
+            verbose=True,  # verbosity
+        )
+
+        # Add priors
+        model.add_priors(
+            prior_log10_N_12CN=[13.5, 1.0],  # cm-2
+            prior_ratio_12C_13C=[50.0, 50.0],
+            prior_log10_Tkin=None,  # ignored
+            prior_velocity=[vlsr, 10.0],  # km s-1
+            prior_fwhm_nonthermal=1.0,  # km s-1
+            prior_fwhm_L=None,  # assume Gaussian line profile
+            prior_rms=None,  # do not infer spectral rms
+            prior_baseline_coeffs=None,  # use default baseline priors
+            assume_LTE=False,  # do not assume LTE
+            prior_log10_Tex=[0.5, 0.25],  # K
+            assume_CTEX_12CN=False,  # do not assume CTEX
+            prior_LTE_precision=100.0,  # width of LTE precision prior
+            assume_CTEX_13CN=True,  # assume CTEX for 13CN
+            fix_log10_Tkin=1.5,  # kinetic temperature is fixed (K)
+            ordered=False,  # do not assume optically-thin
+        )
+
+        # Add likelihood
+        model.add_likelihood()
+
+        # plot the prior predictive
+        prior = model.sample_prior_predictive(
+            samples=100,  # prior predictive samples
+        )
+        axes = plots.plot_predictive(model.data, prior.prior_predictive)
+        fig = axes.ravel()[0].figure
+        fig.tight_layout()
+        fig.savefig(
+            os.path.join(outdir, f"{source}_12_13CN_{n_clouds_input}_prior_predictive.pdf"),
+            bbox_inches="tight",
+        )
+        plt.close(fig)
+
+        for solution in result[f"results_{n_clouds_input}"]["solutions"].keys():
+            if not result[f"results_{n_clouds_input}"]["solutions"][solution]["converged"]:
+                continue
+
+            # pack posterior samples
+            model.trace = az.convert_to_inference_data(
+                result[f"results_{n_clouds_input}"]["solutions"][solution]["trace"]
+            )
+
+            # plot traces
+            axes = plots.plot_traces(
+                model.trace,
+                ["ratio_12C_13C", "velocity", "fwhm_12CN", "fwhm_13CN", "log10_N_12CN", "N_13CN", "tau_total_12CN", "tau_total_13CN"],
+            )
+            fig = axes.ravel()[0].figure
+            fig.tight_layout()
+            fig.savefig(
+                os.path.join(outdir, f"{source}_12_13CN_{n_clouds_input}_trace.pdf"),
+                bbox_inches="tight",
+            )
+            plt.close(fig)
+
+            # plot posterior pairs
+            axes = plots.plot_pair(
+                model.trace,  # samples
+                ["ratio_12C_13C", "velocity", "fwhm_12CN", "fwhm_13CN", "log10_N_12CN", "N_13CN",], # var_names  # var_names to plot
+                labeller=model.labeller,  # label manager
+                kind="scatter",  # plot type
+            )
+            fig = axes.ravel()[0].figure
+            fig.tight_layout()
+            fig.savefig(
+                os.path.join(outdir, f"{source}_12_13CN_{n_clouds_input}_posterior_pair.pdf"),
+                bbox_inches="tight",
+            )
+            plt.close(fig)
+
+            # plot posterior predictive
+            # N.B. this does not work because we don't save the normalized posterior samples
+            '''
+            posterior = model.sample_posterior_predictive(
+                thin=1,  # keep one in {thin} posterior samples
+            )
+            '''
+            thin = 10
+            posterior_predictive = {"12CN_1": [], "12CN_2": [], "13CN": []}
             trace = az.extract(model.trace.posterior)
             for sample in trace.sample[::thin]:
                 trace_sample = trace.sel(sample=sample)
                 sim_params_12CN_1 = {
                     key: trace_sample[key].data
                     for key in [
-                        "log10_N",
+                        "log10_N_12CN",
                         "fwhm_nonthermal",
                         "velocity",
                         "log10_Tex_ul",
-                        "weights",
+                        "weights_12CN",
                         "baseline_12CN_1_norm",
                     ]
                 }
                 sim_params_12CN_2 = {
                     key: trace_sample[key].data
                     for key in [
-                        "log10_N",
+                        "log10_N_12CN",
                         "fwhm_nonthermal",
                         "velocity",
                         "log10_Tex_ul",
-                        "weights",
-                        "baseline_12CN_2_norm",
+                        "weights_12CN",
+                        "baseline_12CN_2_norm", 
+                    ]
+                }
+                sim_params_13CN = {
+                    key: trace_sample[key].data
+                    for key in [
+                        "N_13CN",
+                        "fwhm_nonthermal",
+                        "velocity",
+                        "log10_Tex_ul",
+                        "baseline_13CN_norm",
                     ]
                 }
                 for key in posterior_predictive.keys():
@@ -327,409 +487,10 @@ def main(source, datadir="alma_spectra/", resultsdir="results/"):
                             model.model[key].eval(sim_params_12CN_2, on_unused_input="ignore")
                             + np.random.normal(loc=0.0, scale=model.data[key].noise)
                         )
-            fig, axes = plt.subplots(2, layout="constrained")
-            axes[0].plot(obs_12CN_1.spectral, obs_12CN_1.brightness, "k-")
-            for predictive in posterior_predictive["12CN_1"]:
-                axes[0].plot(obs_12CN_1.spectral, predictive, "r-", alpha=0.1)
-            axes[0].set_xlabel("LSRK Frequency (MHz)")
-            axes[0].set_ylabel(r"$T_B$ (K)")
-            axes[1].plot(obs_12CN_2.spectral, obs_12CN_2.brightness, "k-")
-            for predictive in posterior_predictive["12CN_2"]:
-                axes[1].plot(obs_12CN_2.spectral, predictive, "r-", alpha=0.1)
-            axes[1].set_xlabel("LSRK Frequency (MHz)")
-            axes[1].set_ylabel(r"$T_B$ (K)")
-            fig.savefig(
-                os.path.join(outdir, f"{source}_CN_{n_cloud}_posterior_predictive.pdf"),
-                bbox_inches="tight",
-            )
-            plt.close(fig)
-
-            # plot posterior predictive residuals
-            fig, axes = plt.subplots(2, layout="constrained")
-            axes[0].plot(obs_12CN_1.spectral, np.zeros_like(obs_12CN_1.brightness), "k-")
-            for predictive in posterior_predictive["12CN_1"]:
-                axes[0].plot(
-                    obs_12CN_1.spectral,
-                    obs_12CN_1.brightness - predictive,
-                    "r-",
-                    alpha=0.1,
-                )
-            axes[0].set_xlabel("LSRK Frequency (MHz)")
-            axes[0].set_ylabel(r"$T_B$ (K)")
-            axes[1].plot(obs_12CN_2.spectral, np.zeros_like(obs_12CN_2.brightness), "k-")
-            for predictive in posterior_predictive["12CN_2"]:
-                axes[1].plot(
-                    obs_12CN_2.spectral,
-                    obs_12CN_2.brightness - predictive,
-                    "r-",
-                    alpha=0.1,
-                )
-            axes[1].set_xlabel("LSRK Frequency (MHz)")
-            axes[1].set_ylabel(r"$T_B$ (K)")
-            fig.savefig(
-                os.path.join(
-                    outdir, f"{source}_CN_{n_cloud}_posterior_predictive_residuals.pdf"
-                ),
-                bbox_inches="tight",
-            )
-            plt.close(fig)
-    
-    model = CNRatioModel(
-        data,  # data dictionary
-        n_clouds=n_clouds[np.argmin(bics)],
-        baseline_degree=0,  # polynomial baseline degree
-        bg_temp=hii_temp + 2.7,  # CMB + HII region
-        Beff=1.0,  # beam efficiency
-        Feff=1.0,  # forward efficiency
-        #mol_data_12CN=mol_data_12CN,  # molecular data
-        #mol_data_13CN=mol_data_13CN,  # molecular data
-        seed=1234,  # random seed
-        verbose=True,  # verbosity
-    )
-
-    # Add priors
-    model.add_priors(
-        prior_log10_N_12CN=[13.5, 1.0],  # cm-2
-        prior_ratio_12C_13C=[50.0, 50.0],
-        prior_log10_Tkin=None,  # ignored
-        prior_velocity=[vlsr, 10.0],  # km s-1
-        prior_fwhm_nonthermal=1.0,  # km s-1
-        prior_fwhm_L=None,  # assume Gaussian line profile
-        prior_rms=None,  # do not infer spectral rms
-        prior_baseline_coeffs=None,  # use default baseline priors
-        assume_LTE=False,  # do not assume LTE
-        prior_log10_Tex=[0.5, 0.1],  # K
-        assume_CTEX_12CN=False,  # do not assume CTEX
-        prior_LTE_precision=100.0,  # width of LTE precision prior
-        assume_CTEX_13CN=True,  # assume CTEX for 13CN
-        fix_log10_Tkin=1.5,  # kinetic temperature is fixed (K)
-        ordered=False,  # do not assume optically-thin
-    )
-
-    # Add likelihood
-    model.add_likelihood()
-
-    # plot the prior predictive
-    prior = model.sample_prior_predictive(
-        samples=100,  # prior predictive samples
-    )
-    axes = plots.plot_predictive(model.data, prior.prior_predictive)
-    fig = axes.ravel()[0].figure
-    fig.tight_layout()
-    fig.savefig(
-        os.path.join(outdir, f"{source}_12_13CN_prior_predictive.pdf"),
-        bbox_inches="tight",
-    )
-    plt.close(fig)
-
-    for solution in result["results"]["solutions"].keys():
-        if not result["results"]["solutions"][solution]["converged"]:
-            continue
-
-        # pack posterior samples
-        model.trace = az.convert_to_inference_data(
-            result["results"]["solutions"][solution]["trace"]
-        )
-
-        # plot traces
-        axes = plots.plot_traces(
-            model.trace,
-            ["ratio_12C_13C", "velocity", "fwhm_12CN", "fwhm_13CN", "log10_N_12CN", "N_13CN", "tau_total_12CN", "tau_total_13CN"],
-        )
-        fig = axes.ravel()[0].figure
-        fig.tight_layout()
-        fig.savefig(
-            os.path.join(outdir, f"{source}_12_13CN_trace.pdf"),
-            bbox_inches="tight",
-        )
-        plt.close(fig)
-
-        # plot posterior pairs
-        axes = plots.plot_pair(
-            model.trace,  # samples
-            ["ratio_12C_13C", "velocity", "fwhm_12CN", "fwhm_13CN", "log10_N_12CN", "N_13CN",], # var_names  # var_names to plot
-            labeller=model.labeller,  # label manager
-            kind="scatter",  # plot type
-        )
-        fig = axes.ravel()[0].figure
-        fig.tight_layout()
-        fig.savefig(
-            os.path.join(outdir, f"{source}_12_13CN_posterior_pair.pdf"),
-            bbox_inches="tight",
-        )
-        plt.close(fig)
-
-        # plot posterior predictive
-        # N.B. this does not work because we don't save the normalized posterior samples
-        '''
-        posterior = model.sample_posterior_predictive(
-            thin=1,  # keep one in {thin} posterior samples
-        )
-        '''
-        thin = 10
-        posterior_predictive = {"12CN_1": [], "12CN_2": [], "13CN": []}
-        trace = az.extract(model.trace.posterior)
-        for sample in trace.sample[::thin]:
-            trace_sample = trace.sel(sample=sample)
-            sim_params_12CN_1 = {
-                key: trace_sample[key].data
-                for key in [
-                    "log10_N_12CN",
-                    "fwhm_nonthermal",
-                    "velocity",
-                    "log10_Tex_ul",
-                    "weights_12CN",
-                    "baseline_12CN_1_norm",
-                ]
-            }
-            sim_params_12CN_2 = {
-                key: trace_sample[key].data
-                for key in [
-                    "log10_N_12CN",
-                    "fwhm_nonthermal",
-                    "velocity",
-                    "log10_Tex_ul",
-                    "weights_12CN",
-                    "baseline_12CN_2_norm", 
-                ]
-            }
-            sim_params_13CN = {
-                key: trace_sample[key].data
-                for key in [
-                    "N_13CN",
-                    "fwhm_nonthermal",
-                    "velocity",
-                    "log10_Tex_ul",
-                    "baseline_13CN_norm",
-                ]
-            }
-            for key in posterior_predictive.keys():
-                if key == "12CN_1":
-                    posterior_predictive[key].append(
-                        model.model[key].eval(sim_params_12CN_1, on_unused_input="ignore")
-                        + np.random.normal(loc=0.0, scale=model.data[key].noise)
-                    )
-                if key == "12CN_2":
-                    posterior_predictive[key].append(
-                        model.model[key].eval(sim_params_12CN_2, on_unused_input="ignore")
-                        + np.random.normal(loc=0.0, scale=model.data[key].noise)
-                    )
-                if key == "13CN":
-                    posterior_predictive[key].append(
-                        model.model[key].eval(sim_params_13CN, on_unused_input="ignore")
-                        + np.random.normal(loc=0.0, scale=model.data[key].noise)
-                    )
-        fig, axes = plt.subplots(3, layout="constrained")
-        axes[0].plot(obs_12CN_1.spectral, obs_12CN_1.brightness, "k-")
-        for predictive in posterior_predictive["12CN_1"]:
-            axes[0].plot(obs_12CN_1.spectral, predictive, "r-", alpha=0.1)
-        axes[0].set_xlabel("LSRK Frequency (MHz)")
-        axes[0].set_ylabel(r"$T_B$ (K)")
-        axes[1].plot(obs_12CN_2.spectral, obs_12CN_2.brightness, "k-")
-        for predictive in posterior_predictive["12CN_2"]:
-            axes[1].plot(obs_12CN_2.spectral, predictive, "r-", alpha=0.1)
-        axes[1].set_xlabel("LSRK Frequency (MHz)")
-        axes[1].set_ylabel(r"$T_B$ (K)")
-        axes[2].plot(obs_13CN.spectral, obs_13CN.brightness, "k-")
-        for predictive in posterior_predictive["13CN"]:
-            axes[2].plot(obs_13CN.spectral, predictive, "r-", alpha=0.1)
-        axes[2].set_xlabel("LSRK Frequency (MHz)")
-        axes[2].set_ylabel(r"$T_B$ (K)")
-        fig.savefig(
-            os.path.join(outdir, f"{source}_12_13CN_posterior_predictive.pdf"),
-            bbox_inches="tight",
-        )
-        plt.close(fig)
-
-        # plot posterior predictive residuals
-        fig, axes = plt.subplots(3, layout="constrained")
-        axes[0].plot(obs_12CN_1.spectral, np.zeros_like(obs_12CN_1.brightness), "k-")
-        for predictive in posterior_predictive["12CN_1"]:
-            axes[0].plot(
-                obs_12CN_1.spectral,
-                obs_12CN_1.brightness - predictive,
-                "r-",
-                alpha=0.1,
-            )
-        axes[0].set_xlabel("LSRK Frequency (MHz)")
-        axes[0].set_ylabel(r"$T_B$ (K)")
-        axes[1].plot(obs_12CN_2.spectral, np.zeros_like(obs_12CN_2.brightness), "k-")
-        for predictive in posterior_predictive["12CN_2"]:
-            axes[1].plot(
-                obs_12CN_2.spectral,
-                obs_12CN_2.brightness - predictive,
-                "r-",
-                alpha=0.1,
-            )
-        axes[1].set_xlabel("LSRK Frequency (MHz)")
-        axes[1].set_ylabel(r"$T_B$ (K)")
-        axes[2].plot(obs_13CN.spectral, np.zeros_like(obs_13CN.brightness), "k-")
-        for predictive in posterior_predictive["13CN"]:
-            axes[2].plot(
-                obs_13CN.spectral,
-                obs_13CN.brightness - predictive,
-                "r-",
-                alpha=0.1,
-            )
-        axes[2].set_xlabel("LSRK Frequency (MHz)")
-        axes[2].set_ylabel(r"$T_B$ (K)")
-        fig.savefig(
-            os.path.join(
-                outdir, f"{source}_12_13CN_posterior_predictive_residuals.pdf"
-            ),
-            bbox_inches="tight",
-        )
-        plt.close(fig)
-
-        summary_12CN_12CN_df = result["results"]["solutions"][0]["summary"]
-        summary_12CN_12CN_df.to_csv(os.path.join(outdir, f"{source}_12_13CN_summary_stats.csv"))
-    
-    # Plot figures for best n_clouds - 1
-    if n_clouds[np.argmin(bics)] - 1 > 0:
-        model_best_nclouds_minus_1 = CNRatioModel(
-            data,  # data dictionary
-            n_clouds=n_clouds[np.argmin(bics)] - 1,
-            baseline_degree=0,  # polynomial baseline degree
-            bg_temp=hii_temp + 2.7,  # CMB + HII region
-            Beff=1.0,  # beam efficiency
-            Feff=1.0,  # forward efficiency
-            #mol_data_12CN=mol_data_12CN,  # molecular data
-            #mol_data_13CN=mol_data_13CN,  # molecular data
-            seed=1234,  # random seed
-            verbose=True,  # verbosity
-        )
-
-        # Add priors
-        model_best_nclouds_minus_1.add_priors(
-            prior_log10_N_12CN=[13.5, 1.0],  # cm-2
-            prior_ratio_12C_13C=[50.0, 50.0],
-            prior_log10_Tkin=None,  # ignored
-            prior_velocity=[vlsr, 10.0],  # km s-1
-            prior_fwhm_nonthermal=1.0,  # km s-1
-            prior_fwhm_L=None,  # assume Gaussian line profile
-            prior_rms=None,  # do not infer spectral rms
-            prior_baseline_coeffs=None,  # use default baseline priors
-            assume_LTE=False,  # do not assume LTE
-            prior_log10_Tex=[0.5, 0.1],  # K
-            assume_CTEX_12CN=False,  # do not assume CTEX
-            prior_LTE_precision=100.0,  # width of LTE precision prior
-            assume_CTEX_13CN=True,  # assume CTEX for 13CN
-            fix_log10_Tkin=1.5,  # kinetic temperature is fixed (K)
-            ordered=False,  # do not assume optically-thin
-        )
-
-        # Add likelihood
-        model_best_nclouds_minus_1.add_likelihood()
-
-        # plot the prior predictive
-        prior = model_best_nclouds_minus_1.sample_prior_predictive(
-            samples=100,  # prior predictive samples
-        )
-        axes = plots.plot_predictive(model_best_nclouds_minus_1.data, prior.prior_predictive)
-        fig = axes.ravel()[0].figure
-        fig.tight_layout()
-        fig.savefig(
-            os.path.join(outdir, f"{source}_12_13CN_best_nclouds-1_prior_predictive.pdf"),
-            bbox_inches="tight",
-        )
-        plt.close(fig)
-
-        for solution in result["results_best_nclouds-1"]["solutions"].keys():
-            if not result["results_best_nclouds-1"]["solutions"][solution]["converged"]:
-                continue
-
-            # pack posterior samples
-            model_best_nclouds_minus_1.trace = az.convert_to_inference_data(
-                result["results_best_nclouds-1"]["solutions"][solution]["trace"]
-            )
-
-            # plot traces
-            axes = plots.plot_traces(
-                model_best_nclouds_minus_1.trace,
-                ["ratio_12C_13C", "velocity", "fwhm_12CN", "fwhm_13CN", "log10_N_12CN", "N_13CN", "tau_total_12CN", "tau_total_13CN"],
-            )
-            fig = axes.ravel()[0].figure
-            fig.tight_layout()
-            fig.savefig(
-                os.path.join(outdir, f"{source}_12_13CN_best_nclouds-1_trace.pdf"),
-                bbox_inches="tight",
-            )
-            plt.close(fig)
-
-            # plot posterior pairs
-            axes = plots.plot_pair(
-                model_best_nclouds_minus_1.trace,  # samples
-                ["ratio_12C_13C", "velocity", "fwhm_12CN", "fwhm_13CN", "log10_N_12CN", "N_13CN",], # var_names  # var_names to plot
-                labeller=model_best_nclouds_minus_1.labeller,  # label manager
-                kind="scatter",  # plot type
-            )
-            fig = axes.ravel()[0].figure
-            fig.tight_layout()
-            fig.savefig(
-                os.path.join(outdir, f"{source}_12_13CN_best_nclouds-1_posterior_pair.pdf"),
-                bbox_inches="tight",
-            )
-            plt.close(fig)
-
-            # plot posterior predictive
-            # N.B. this does not work because we don't save the normalized posterior samples
-            '''
-            posterior = model.sample_posterior_predictive(
-                thin=1,  # keep one in {thin} posterior samples
-            )
-            '''
-            thin = 10
-            posterior_predictive = {"12CN_1": [], "12CN_2": [], "13CN": []}
-            trace = az.extract(model_best_nclouds_minus_1.trace.posterior)
-            for sample in trace.sample[::thin]:
-                trace_sample = trace.sel(sample=sample)
-                sim_params_12CN_1 = {
-                    key: trace_sample[key].data
-                    for key in [
-                        "log10_N_12CN",
-                        "fwhm_nonthermal",
-                        "velocity",
-                        "log10_Tex_ul",
-                        "weights_12CN",
-                        "baseline_12CN_1_norm",
-                    ]
-                }
-                sim_params_12CN_2 = {
-                    key: trace_sample[key].data
-                    for key in [
-                        "log10_N_12CN",
-                        "fwhm_nonthermal",
-                        "velocity",
-                        "log10_Tex_ul",
-                        "weights_12CN",
-                        "baseline_12CN_2_norm", 
-                    ]
-                }
-                sim_params_13CN = {
-                    key: trace_sample[key].data
-                    for key in [
-                        "N_13CN",
-                        "fwhm_nonthermal",
-                        "velocity",
-                        "log10_Tex_ul",
-                        "baseline_13CN_norm",
-                    ]
-                }
-                for key in posterior_predictive.keys():
-                    if key == "12CN_1":
-                        posterior_predictive[key].append(
-                            model_best_nclouds_minus_1.model[key].eval(sim_params_12CN_1, on_unused_input="ignore")
-                            + np.random.normal(loc=0.0, scale=model_best_nclouds_minus_1.data[key].noise)
-                        )
-                    if key == "12CN_2":
-                        posterior_predictive[key].append(
-                            model_best_nclouds_minus_1.model[key].eval(sim_params_12CN_2, on_unused_input="ignore")
-                            + np.random.normal(loc=0.0, scale=model_best_nclouds_minus_1.data[key].noise)
-                        )
                     if key == "13CN":
                         posterior_predictive[key].append(
-                            model_best_nclouds_minus_1.model[key].eval(sim_params_13CN, on_unused_input="ignore")
-                            + np.random.normal(loc=0.0, scale=model_best_nclouds_minus_1.data[key].noise)
+                            model.model[key].eval(sim_params_13CN, on_unused_input="ignore")
+                            + np.random.normal(loc=0.0, scale=model.data[key].noise)
                         )
             fig, axes = plt.subplots(3, layout="constrained")
             axes[0].plot(obs_12CN_1.spectral, obs_12CN_1.brightness, "k-")
@@ -748,7 +509,7 @@ def main(source, datadir="alma_spectra/", resultsdir="results/"):
             axes[2].set_xlabel("LSRK Frequency (MHz)")
             axes[2].set_ylabel(r"$T_B$ (K)")
             fig.savefig(
-                os.path.join(outdir, f"{source}_12_13CN_best_nclouds-1_posterior_predictive.pdf"),
+                os.path.join(outdir, f"{source}_12_13CN_{n_clouds_input}_posterior_predictive.pdf"),
                 bbox_inches="tight",
             )
             plt.close(fig)
@@ -787,227 +548,15 @@ def main(source, datadir="alma_spectra/", resultsdir="results/"):
             axes[2].set_ylabel(r"$T_B$ (K)")
             fig.savefig(
                 os.path.join(
-                    outdir, f"{source}_12_13CN_best_nclouds-1_posterior_predictive_residuals.pdf"
+                    outdir, f"{source}_12_13CN_{n_clouds_input}_posterior_predictive_residuals.pdf"
                 ),
                 bbox_inches="tight",
             )
             plt.close(fig)
 
-            summary_12CN_12CN_df = result["results_best_nclouds-1"]["solutions"][0]["summary"]
-            summary_12CN_12CN_df.to_csv(os.path.join(outdir, f"{source}_12_13CN_best_nclouds-1_summary_stats.csv"))
-
-    # Plot figures for best n_clouds - 2
-    if n_clouds[np.argmin(bics)] - 2 > 0:
-        model_best_nclouds_minus_2 = CNRatioModel(
-            data,  # data dictionary
-            n_clouds=n_clouds[np.argmin(bics)] - 2,
-            baseline_degree=0,  # polynomial baseline degree
-            bg_temp=hii_temp + 2.7,  # CMB + HII region
-            Beff=1.0,  # beam efficiency
-            Feff=1.0,  # forward efficiency
-            #mol_data_12CN=mol_data_12CN,  # molecular data
-            #mol_data_13CN=mol_data_13CN,  # molecular data
-            seed=1234,  # random seed
-            verbose=True,  # verbosity
-        )
-
-        # Add priors
-        model_best_nclouds_minus_2.add_priors(
-            prior_log10_N_12CN=[13.5, 1.0],  # cm-2
-            prior_ratio_12C_13C=[50.0, 50.0],
-            prior_log10_Tkin=None,  # ignored
-            prior_velocity=[vlsr, 10.0],  # km s-1
-            prior_fwhm_nonthermal=1.0,  # km s-1
-            prior_fwhm_L=None,  # assume Gaussian line profile
-            prior_rms=None,  # do not infer spectral rms
-            prior_baseline_coeffs=None,  # use default baseline priors
-            assume_LTE=False,  # do not assume LTE
-            prior_log10_Tex=[0.5, 0.1],  # K
-            assume_CTEX_12CN=False,  # do not assume CTEX
-            prior_LTE_precision=100.0,  # width of LTE precision prior
-            assume_CTEX_13CN=True,  # assume CTEX for 13CN
-            fix_log10_Tkin=1.5,  # kinetic temperature is fixed (K)
-            ordered=False,  # do not assume optically-thin
-        )
-
-        # Add likelihood
-        model_best_nclouds_minus_2.add_likelihood()
-
-        # plot the prior predictive
-        prior = model_best_nclouds_minus_2.sample_prior_predictive(
-            samples=100,  # prior predictive samples
-        )
-        axes = plots.plot_predictive(model_best_nclouds_minus_2.data, prior.prior_predictive)
-        fig = axes.ravel()[0].figure
-        fig.tight_layout()
-        fig.savefig(
-            os.path.join(outdir, f"{source}_12_13CN_best_nclouds-2_prior_predictive.pdf"),
-            bbox_inches="tight",
-        )
-        plt.close(fig)
-
-        for solution in result["results_best_nclouds-2"]["solutions"].keys():
-            if not result["results_best_nclouds-2"]["solutions"][solution]["converged"]:
-                continue
-
-            # pack posterior samples
-            model_best_nclouds_minus_2.trace = az.convert_to_inference_data(
-                result["results_best_nclouds-2"]["solutions"][solution]["trace"]
-            )
-
-            # plot traces
-            axes = plots.plot_traces(
-                model_best_nclouds_minus_2.trace,
-                ["ratio_12C_13C", "velocity", "fwhm_12CN", "fwhm_13CN", "log10_N_12CN", "N_13CN", "tau_total_12CN", "tau_total_13CN"],
-            )
-            fig = axes.ravel()[0].figure
-            fig.tight_layout()
-            fig.savefig(
-                os.path.join(outdir, f"{source}_12_13CN_best_nclouds-2_trace.pdf"),
-                bbox_inches="tight",
-            )
-            plt.close(fig)
-
-            # plot posterior pairs
-            axes = plots.plot_pair(
-                model_best_nclouds_minus_2.trace,  # samples
-                ["ratio_12C_13C", "velocity", "fwhm_12CN", "fwhm_13CN", "log10_N_12CN", "N_13CN",], # var_names  # var_names to plot
-                labeller=model_best_nclouds_minus_2.labeller,  # label manager
-                kind="scatter",  # plot type
-            )
-            fig = axes.ravel()[0].figure
-            fig.tight_layout()
-            fig.savefig(
-                os.path.join(outdir, f"{source}_12_13CN_best_nclouds-2_posterior_pair.pdf"),
-                bbox_inches="tight",
-            )
-            plt.close(fig)
-
-            # plot posterior predictive
-            # N.B. this does not work because we don't save the normalized posterior samples
-            '''
-            posterior = model.sample_posterior_predictive(
-                thin=1,  # keep one in {thin} posterior samples
-            )
-            '''
-            thin = 10
-            posterior_predictive = {"12CN_1": [], "12CN_2": [], "13CN": []}
-            trace = az.extract(model_best_nclouds_minus_2.trace.posterior)
-            for sample in trace.sample[::thin]:
-                trace_sample = trace.sel(sample=sample)
-                sim_params_12CN_1 = {
-                    key: trace_sample[key].data
-                    for key in [
-                        "log10_N_12CN",
-                        "fwhm_nonthermal",
-                        "velocity",
-                        "log10_Tex_ul",
-                        "weights_12CN",
-                        "baseline_12CN_1_norm",
-                    ]
-                }
-                sim_params_12CN_2 = {
-                    key: trace_sample[key].data
-                    for key in [
-                        "log10_N_12CN",
-                        "fwhm_nonthermal",
-                        "velocity",
-                        "log10_Tex_ul",
-                        "weights_12CN",
-                        "baseline_12CN_2_norm", 
-                    ]
-                }
-                sim_params_13CN = {
-                    key: trace_sample[key].data
-                    for key in [
-                        "N_13CN",
-                        "fwhm_nonthermal",
-                        "velocity",
-                        "log10_Tex_ul",
-                        "baseline_13CN_norm",
-                    ]
-                }
-                for key in posterior_predictive.keys():
-                    if key == "12CN_1":
-                        posterior_predictive[key].append(
-                            model_best_nclouds_minus_2.model[key].eval(sim_params_12CN_1, on_unused_input="ignore")
-                            + np.random.normal(loc=0.0, scale=model_best_nclouds_minus_2.data[key].noise)
-                        )
-                    if key == "12CN_2":
-                        posterior_predictive[key].append(
-                            model_best_nclouds_minus_2.model[key].eval(sim_params_12CN_2, on_unused_input="ignore")
-                            + np.random.normal(loc=0.0, scale=model_best_nclouds_minus_2.data[key].noise)
-                        )
-                    if key == "13CN":
-                        posterior_predictive[key].append(
-                            model_best_nclouds_minus_2.model[key].eval(sim_params_13CN, on_unused_input="ignore")
-                            + np.random.normal(loc=0.0, scale=model_best_nclouds_minus_2.data[key].noise)
-                        )
-            fig, axes = plt.subplots(3, layout="constrained")
-            axes[0].plot(obs_12CN_1.spectral, obs_12CN_1.brightness, "k-")
-            for predictive in posterior_predictive["12CN_1"]:
-                axes[0].plot(obs_12CN_1.spectral, predictive, "r-", alpha=0.1)
-            axes[0].set_xlabel("LSRK Frequency (MHz)")
-            axes[0].set_ylabel(r"$T_B$ (K)")
-            axes[1].plot(obs_12CN_2.spectral, obs_12CN_2.brightness, "k-")
-            for predictive in posterior_predictive["12CN_2"]:
-                axes[1].plot(obs_12CN_2.spectral, predictive, "r-", alpha=0.1)
-            axes[1].set_xlabel("LSRK Frequency (MHz)")
-            axes[1].set_ylabel(r"$T_B$ (K)")
-            axes[2].plot(obs_13CN.spectral, obs_13CN.brightness, "k-")
-            for predictive in posterior_predictive["13CN"]:
-                axes[2].plot(obs_13CN.spectral, predictive, "r-", alpha=0.1)
-            axes[2].set_xlabel("LSRK Frequency (MHz)")
-            axes[2].set_ylabel(r"$T_B$ (K)")
-            fig.savefig(
-                os.path.join(outdir, f"{source}_12_13CN_best_nclouds-2_posterior_predictive.pdf"),
-                bbox_inches="tight",
-            )
-            plt.close(fig)
-
-            # plot posterior predictive residuals
-            fig, axes = plt.subplots(3, layout="constrained")
-            axes[0].plot(obs_12CN_1.spectral, np.zeros_like(obs_12CN_1.brightness), "k-")
-            for predictive in posterior_predictive["12CN_1"]:
-                axes[0].plot(
-                    obs_12CN_1.spectral,
-                    obs_12CN_1.brightness - predictive,
-                    "r-",
-                    alpha=0.1,
-                )
-            axes[0].set_xlabel("LSRK Frequency (MHz)")
-            axes[0].set_ylabel(r"$T_B$ (K)")
-            axes[1].plot(obs_12CN_2.spectral, np.zeros_like(obs_12CN_2.brightness), "k-")
-            for predictive in posterior_predictive["12CN_2"]:
-                axes[1].plot(
-                    obs_12CN_2.spectral,
-                    obs_12CN_2.brightness - predictive,
-                    "r-",
-                    alpha=0.1,
-                )
-            axes[1].set_xlabel("LSRK Frequency (MHz)")
-            axes[1].set_ylabel(r"$T_B$ (K)")
-            axes[2].plot(obs_13CN.spectral, np.zeros_like(obs_13CN.brightness), "k-")
-            for predictive in posterior_predictive["13CN"]:
-                axes[2].plot(
-                    obs_13CN.spectral,
-                    obs_13CN.brightness - predictive,
-                    "r-",
-                    alpha=0.1,
-                )
-            axes[2].set_xlabel("LSRK Frequency (MHz)")
-            axes[2].set_ylabel(r"$T_B$ (K)")
-            fig.savefig(
-                os.path.join(
-                    outdir, f"{source}_12_13CN_best_nclouds-2_posterior_predictive_residuals.pdf"
-                ),
-                bbox_inches="tight",
-            )
-            plt.close(fig)
-
-            summary_12CN_12CN_df = result["results_best_nclouds-2"]["solutions"][0]["summary"]
-            summary_12CN_12CN_df.to_csv(os.path.join(outdir, f"{source}_12_13CN_best_nclouds-2_summary_stats.csv"))
-
+            summary_12CN_12CN_df = result[f"results_{n_clouds_input}"]["solutions"][0]["summary"]
+            summary_12CN_12CN_df.to_csv(os.path.join(outdir, f"{source}_12_13CN_{n_clouds_input}_summary_stats.csv"))
+    
 if __name__ == "__main__":
     source = sys.argv[1]
     datadir = sys.argv[2]
