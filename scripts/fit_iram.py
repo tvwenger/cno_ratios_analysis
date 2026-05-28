@@ -107,7 +107,7 @@ def main(source, project, prior_velocity, data_ranges):
             bg_temp=2.7,
             Beff=0.782,
             Feff=1.0,
-            max_n_clouds=5,
+            max_n_clouds=1,
             baseline_degree=0,
             seed=1234,
             verbose=True,
