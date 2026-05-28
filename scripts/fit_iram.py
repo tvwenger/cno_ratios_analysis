@@ -176,7 +176,7 @@ if __name__ == "__main__":
         for line in f:
             parts = line.split()
             if parts[0] == source:
-                prior_velocity = np.arrray(parts[1:3], dtype=float)
+                prior_velocity = np.array(parts[1:3], dtype=float)
                 if prior_velocity[1] < prior_velocity[0]:
                     prior_velocity = prior_velocity[::-1]
                 data_ranges = np.array(parts[3:], dtype=int)
