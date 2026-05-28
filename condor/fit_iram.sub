@@ -14,7 +14,7 @@ arguments = $(source)
 # Data handling
 should_transfer_files = YES
 when_to_transfer_output = ON_EXIT
-transfer_input_files = $(DIR)/scripts/fit_iram.py,$(DIR)/data/bayes_hfs_priors.txt,$(DIR)/data/107-23.tar.gz,$(DIR)/data/042-25.tar.gz
+transfer_input_files = $(DIR)/scripts/fit_iram.py,$(DIR)/data/bayes_hfs_priors.txt,$(DIR)/data/mol_data_12CN.pkl,$(DIR)/data/mol_data_13CN.pkl,$(DIR)/data/mol_metadata_12CN.pkl,$(DIR)/data/mol_metadata_13CN.pkl,$(DIR)/data/107-23.tar.gz,$(DIR)/data/042-25.tar.gz
 transfer_output_remaps = "$(source)_results.pkl = $(DIR)/results/$(source)_results.pkl"
 
 # Logging
