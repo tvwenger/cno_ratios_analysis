@@ -26,7 +26,7 @@ stream_error = True
 
 # Resource request
 request_cpus = 8
-request_memory = 8GB
-request_disk = 8GB
+request_memory = 16GB
+request_disk = 16GB
 
 queue source from $(DIR)/data/all_sources.txt
