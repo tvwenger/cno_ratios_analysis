@@ -1,5 +1,8 @@
 #!/bin/bash
 
+tar -xzvf 107-23.tar.gz
+tar -xzvf 042-25.tar.gz
+
 # temporary pytensor compiledir
 tmpdir=`mktemp -d`
 echo "starting to analyze $1"

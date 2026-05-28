@@ -40,9 +40,9 @@ def main(source, project, prior_velocity, data_ranges):
     }
 
     # load CN mol_data
-    with open("data/mol_data_12CN.pkl", "rb") as f:
+    with open("mol_data_12CN.pkl", "rb") as f:
         all_mol_data_12CN = pickle.load(f)
-    with open("data/mol_metadata_12CN.pkl", "rb") as f:
+    with open("mol_metadata_12CN.pkl", "rb") as f:
         all_mol_metadata_12CN = pickle.load(f)
 
     # Keep only Kl = 0 transitions
@@ -52,9 +52,9 @@ def main(source, project, prior_velocity, data_ranges):
     all_mol_data_12CN["GLO"] = 2 * all_mol_data_12CN["F1l"]
 
     # load 13CN mol_data
-    with open("data/mol_data_13CN.pkl", "rb") as f:
+    with open("mol_data_13CN.pkl", "rb") as f:
         all_mol_data_13CN = pickle.load(f)
-    with open("data/mol_metadata_13CN.pkl", "rb") as f:
+    with open("mol_metadata_13CN.pkl", "rb") as f:
         all_mol_metadata_13CN = pickle.load(f)
 
     # Add GLO
@@ -73,7 +73,7 @@ def main(source, project, prior_velocity, data_ranges):
     ]
     data = {}
     for data_key, label, data_range in zip(data_keys, labels, data_ranges):
-        with fits.open(f"data/{project}/{source}-{data_key}.fits") as hdulist:
+        with fits.open(f"{project}/{source}-{data_key}.fits") as hdulist:
             hdu = hdulist[0]
             freq_axis = (
                 (np.arange(hdu.header["NAXIS1"]) + 1 - hdu.header["CRPIX1"])
@@ -183,7 +183,7 @@ if __name__ == "__main__":
     if prior_velocity is None:
         raise ValueError(f"{source} not found in bayes_hfs_priors.txt")
 
-    datafiles = glob.glob(f"data/*/{source}*.csv")
+    datafiles = glob.glob(f"*/{source}*.csv")
     project = "107-23"
     for file in datafiles:
         if "042-25" in file:
