@@ -1,7 +1,13 @@
 # cno_ratios_analysis
 Analysis scripts for ALMA/IRAM CNO ratio analysis
 
+`scripts/fit_iram.py` fits the model to IRAM data.
 
+`condor/fit_iram.sub` runs the model fitting script on each IRAM target. Submit it like:
+
+`condor_submit fit_iram.sub`.
+
+The results are stored in `results/`.
 
 ## Outdated
 These files have been moved to `old/`.
