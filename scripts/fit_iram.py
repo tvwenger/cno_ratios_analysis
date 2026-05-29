@@ -18,12 +18,12 @@ import cloudpickle as cpickle
 from astropy.io import fits
 import astropy.constants as c
 
-from bayes_spec import SpecData, Optimize
+from bayes_spec import SpecData
 from bayes_hfs import supplement_molecule_data, HFSRatioModel
 
 
-def main(source, project, prior_velocity, data_ranges):
-    print(f"Starting job on {source}")
+def main(source, n_clouds, project, prior_velocity, data_ranges):
+    print(f"Starting job on {source} with n_clouds={n_clouds}")
     print(f"pymc version: {pm.__version__}")
     print(f"bayes_spec version: {bayes_spec.__version__}")
     print(f"bayes_hfs version: {bayes_hfs.__version__}")
@@ -33,10 +33,11 @@ def main(source, project, prior_velocity, data_ranges):
 
     result = {
         "source": source,
+        "n_clouds": n_clouds,
         "prior_velocity": prior_velocity,
         "data_ranges": data_ranges,
         "exception": "",
-        "opt": None,
+        "model": None,
     }
 
     # load CN mol_data
@@ -98,8 +99,7 @@ def main(source, project, prior_velocity, data_ranges):
 
     try:
         # Initialize optimizer
-        opt = Optimize(
-            HFSRatioModel,
+        model = HFSRatioModel(
             mol_data_12CN,
             mol_data_13CN,
             mol_keys,
@@ -107,14 +107,14 @@ def main(source, project, prior_velocity, data_ranges):
             bg_temp=2.7,
             Beff=0.782,
             Feff=1.0,
-            max_n_clouds=5,
+            n_clouds=n_clouds,
             baseline_degree=0,
             seed=1234,
             verbose=True,
         )
 
         # Define each model
-        opt.add_priors(
+        model.add_priors(
             prior_log10_Ntot1=[13.5, 0.5],
             prior_ratio=0.1,
             prior_fwhm2=1.0,
@@ -128,38 +128,32 @@ def main(source, project, prior_velocity, data_ranges):
             prior_fwhm_L=None,
             prior_baseline_coeffs=None,
         )
-        opt.add_likelihood()
+        model.add_likelihood()
 
-        # optimize
-        fit_kwargs = {
-            "rel_tolerance": 0.01,
-            "abs_tolerance": 0.01,
-            "learning_rate": 0.001,
-        }
-        sample_kwargs = {
-            "chains": 8,
-            "cores": 8,
-            "tune": 1000,
-            "draws": 1000,
-            "n_init": 200_000,
-            "init_kwargs": fit_kwargs,
-            "nuts_kwargs": {"target_accept": 0.9},
-        }
+        # sample
         solve_kwargs = {
             "init_params": "random_from_data",
             "n_init": 10,
             "max_iter": 1_000,
             "kl_div_threshold": 0.1,
         }
-        opt.optimize(
-            bic_threshold=10.0,
-            sample_kwargs=sample_kwargs,
-            fit_kwargs=fit_kwargs,
-            solve_kwargs=solve_kwargs,
-            approx=False,
-            start_spread={"velocity_norm": [0.1, 0.9]},
+        model.sample(
+            init="advi+adapt_diag",
+            tune=1000,
+            draws=1000,
+            chains=8,
+            cores=8,
+            n_init=200_000,
+            init_kwargs={
+                "rel_tolerance": 0.01,
+                "abs_tolerance": 0.01,
+                "learning_rate": 0.001,
+                "start": {"velocity_norm": np.linspace(0.1, 0.9, n_clouds)},
+            },
+            nuts_kwargs={"target_accept": 0.8},
         )
-        result["opt"] = opt
+        model.solve(**solve_kwargs)
+        result["model"] = model
 
     except Exception as ex:
         result["exception"] = ex
@@ -169,6 +163,7 @@ def main(source, project, prior_velocity, data_ranges):
 
 if __name__ == "__main__":
     source = sys.argv[1]
+    n_clouds = int(sys.argv[2])
 
     prior_velocity = None
     data_ranges = None
@@ -189,12 +184,11 @@ if __name__ == "__main__":
         if "042-25" in file:
             project = "042-25"
 
-    outfile = f"{source}_results.pkl"
-
-    output = main(source, project, prior_velocity, data_ranges)
+    output = main(source, n_clouds, project, prior_velocity, data_ranges)
     if output["exception"] != "":
         print("EXCEPTION:", output["exception"])
 
     # save results
+    outfile = f"{source}_n{n_clouds}_results.pkl"
     with open(outfile, "wb") as f:
         cpickle.dump(output, f)

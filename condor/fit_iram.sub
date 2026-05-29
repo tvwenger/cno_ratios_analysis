@@ -9,7 +9,7 @@ container_image = $(ODIR)/bayes_hfs_v1.1.1.sif
 
 # Executable
 executable = $(DIR)/condor/run_fit_iram.sh
-arguments = $(source)
+arguments = $(source) $(n)
 
 # Data handling
 should_transfer_files = YES
