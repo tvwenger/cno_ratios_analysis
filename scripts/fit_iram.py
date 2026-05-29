@@ -36,8 +36,6 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
         "n_clouds": n_clouds,
         "prior_velocity": prior_velocity,
         "data_ranges": data_ranges,
-        "exception": "",
-        "model": None,
     }
 
     # load CN mol_data
@@ -185,7 +183,7 @@ if __name__ == "__main__":
             project = "042-25"
 
     output = main(source, n_clouds, project, prior_velocity, data_ranges)
-    if output["exception"] != "":
+    if "exception" in output:
         print("EXCEPTION:", output["exception"])
 
     # save results
