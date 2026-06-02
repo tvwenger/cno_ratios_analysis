@@ -33,6 +33,7 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
 
     result = {
         "source": source,
+        "project": project,
         "n_clouds": n_clouds,
         "prior_velocity": prior_velocity,
         "data_ranges": data_ranges,
@@ -148,7 +149,7 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
                 "learning_rate": 0.001,
                 "start": {"velocity_norm": np.linspace(0.1, 0.9, n_clouds)},
             },
-            nuts_kwargs={"target_accept": 0.8},
+            nuts_kwargs={"target_accept": 0.9},
         )
         model.solve(**solve_kwargs)
         result["model"] = model
