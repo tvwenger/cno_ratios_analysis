@@ -97,7 +97,7 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
     }
 
     try:
-        # Initialize optimizer
+        # Initialize model
         model = HFSRatioModel(
             mol_data_12CN,
             mol_data_13CN,
@@ -111,10 +111,8 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
             seed=1234,
             verbose=True,
         )
-
-        # Define each model
         model.add_priors(
-            prior_log10_Ntot1=[13.5, 0.5],
+            prior_log10_Ntot1=[14.5, 0.5],
             prior_ratio=0.1,
             prior_fwhm2=1.0,
             prior_velocity=prior_velocity,
