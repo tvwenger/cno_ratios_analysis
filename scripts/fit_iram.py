@@ -175,7 +175,7 @@ if __name__ == "__main__":
     if prior_velocity is None:
         raise ValueError(f"{source} not found in bayes_hfs_priors.txt")
 
-    datafiles = glob.glob(f"*/{source}*.csv")
+    datafiles = glob.glob(f"*/{source}*.fits")
     project = "107-23"
     for file in datafiles:
         if "042-25" in file:
