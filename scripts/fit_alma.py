@@ -74,21 +74,18 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
     data_13CN = data_13CN[~np.isnan(data_13CN).any(axis=1)]
 
     # estimate noise
-    noise_12CN_1 = 1.4826 * np.median(
-        np.abs(data_12CN_1[:, 1] - np.median(data_12CN_1[:, 1]))
-    )
-    noise_12CN_2 = 1.4826 * np.median(
-        np.abs(data_12CN_2[:, 1] - np.median(data_12CN_2[:, 1]))
-    )
-    noise_13CN = 1.4826 * np.median(
-        np.abs(data_13CN[:, 1] - np.median(data_13CN[:, 1]))
-    )
+    #noise_12CN_1_spec = np.concatenate([data_12CN_1[0:data_ranges[0][0], 1], data_12CN_1[data_ranges[0][1]:-1, 1]])
+    #noise_12CN_1 = 1.4826 * np.median(np.abs(noise_12CN_1_spec - np.median(noise_12CN_1_spec)))
+    noise_12CN_2_spec = np.concatenate([data_12CN_2[0:data_ranges[1][0], 1], data_12CN_2[data_ranges[1][1]:-1, 1]])
+    noise_12CN_2 = 1.4826 * np.median(np.abs(noise_12CN_2_spec - np.median(noise_12CN_2_spec)))
+    noise_13CN_spec = np.concatenate([data_13CN[0:data_ranges[2][0], 1], data_13CN[data_ranges[2][1]:-1, 1]])
+    noise_13CN = 1.4826 * np.median(np.abs(noise_13CN_spec - np.median(noise_13CN_spec)))
 
     # save data
     data = {}
     labels = ["12CN_1", "12CN_2", "13CN"]
     data_specs = [data_12CN_1, data_12CN_2, data_13CN]
-    noises = [noise_12CN_1, noise_12CN_2, noise_13CN]
+    noises = [noise_13CN, noise_12CN_2, noise_13CN] # assume 13CN noise because 12CN_1 noise is hard to measure
     ylabels = [r"CN $T_B$ (K)", r"CN $T_B$ (K)", r"$^{13}$CN $T_B$ (K)"]
 
     for label, data_spec, noise, data_range, ylabel in zip(
