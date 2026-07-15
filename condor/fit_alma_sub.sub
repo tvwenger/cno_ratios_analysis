@@ -25,7 +25,7 @@ stream_output = True
 stream_error = True
 
 # Resource request
-+JobDurationCategory = “Long”
++JobDurationCategory = "Long"
 request_cpus = 8
 request_memory = 16GB
 request_disk = 16GB
