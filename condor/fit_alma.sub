@@ -5,7 +5,7 @@ ODIR = osdf:///ospool/ap40/data/trey.wenger
 DIR = /home/trey.wenger/cno_ratios_analysis
 
 # Container
-container_image = $(ODIR)/bayes_hfs_v1.1.1.sif
+container_image = $(ODIR)/bayes_hfs_v1.1.3.sif
 
 # Executable
 executable = $(DIR)/condor/run_fit_alma.sh
