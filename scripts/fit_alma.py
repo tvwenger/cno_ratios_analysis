@@ -129,7 +129,7 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
             Feff=1.0,
             n_clouds=n_clouds,
             baseline_degree=0,
-            ripple=True,
+            ripples=True,
             seed=1234,
             verbose=True,
         )
