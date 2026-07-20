@@ -1,5 +1,6 @@
 # Condor Submit File
 # bayes_hfs analysis of ALMA data
+# Execute like: condor_submit fit_alma.sub out=alma_20260720 n=1
 
 ODIR = osdf:///ospool/ap40/data/trey.wenger
 DIR = /home/trey.wenger/cno_ratios_analysis
@@ -15,7 +16,7 @@ arguments = $(source) $(n)
 should_transfer_files = YES
 when_to_transfer_output = ON_EXIT
 transfer_input_files = $(DIR)/scripts/fit_alma.py,$(DIR)/data/bayes_hfs_alma_priors.txt,$(DIR)/data/mol_data_12CN.pkl,$(DIR)/data/mol_data_13CN.pkl,$(DIR)/data/mol_metadata_12CN.pkl,$(DIR)/data/mol_metadata_13CN.pkl,$(DIR)/data/alma.tar.gz
-transfer_output_remaps = "$(source)_n$(n)_results.pkl = $(ODIR)/results/alma/$(source)_n$(n)_results.pkl"
+transfer_output_remaps = "$(source)_n$(n)_results.pkl = $(ODIR)/results/$(out)/$(source)_n$(n)_results.pkl"
 
 # Logging
 log = $(DIR)/logs/alma_$(Cluster)_$(Process).log

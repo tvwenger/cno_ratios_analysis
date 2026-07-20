@@ -64,11 +64,11 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
     mol_data_13CN = supplement_molecule_data(all_mol_data_13CN, all_mol_metadata_13CN)
 
     # load data
-    data_12CN_1 = np.genfromtxt(f"{source}_feather_CN.tsv")
-    data_12CN_2 = np.genfromtxt(f"{source}_feather_cont1.tsv")
+    data_12CN_1 = np.genfromtxt(f"data/{source}_feather_CN.tsv")
+    data_12CN_2 = np.genfromtxt(f"data/{source}_feather_cont1.tsv")
     if source == "G329.460":
         data_12CN_2[:, 0] *= 1000.0
-    data_13CN = np.genfromtxt(f"{source}_feather_13CN.tsv")
+    data_13CN = np.genfromtxt(f"data/{source}_feather_13CN.tsv")
     data_12CN_1 = data_12CN_1[~np.isnan(data_12CN_1).any(axis=1)]
     data_12CN_2 = data_12CN_2[~np.isnan(data_12CN_2).any(axis=1)]
     data_13CN = data_13CN[~np.isnan(data_13CN).any(axis=1)]
