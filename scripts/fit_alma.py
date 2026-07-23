@@ -74,14 +74,18 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
     data_13CN = data_13CN[~np.isnan(data_13CN).any(axis=1)]
 
     # estimate noise
-    # noise_12CN_1_spec = np.concatenate([data_12CN_1[0:data_ranges[0][0], 1], data_12CN_1[data_ranges[0][1]:-1, 1]])
-    # noise_12CN_1 = 1.4826 * np.median(np.abs(noise_12CN_1_spec - np.median(noise_12CN_1_spec)))
-    noise_12CN_2_spec = np.concatenate(
-        [data_12CN_2[0 : data_ranges[1][0], 1], data_12CN_2[data_ranges[1][1] : -1, 1]]
+    noise_12CN_1_spec = np.concatenate(
+        [data_12CN_1[0 : data_ranges[0][0], 1], data_12CN_1[data_ranges[0][1] : -1, 1]]
     )
-    noise_12CN_2 = 1.4826 * np.median(
-        np.abs(noise_12CN_2_spec - np.median(noise_12CN_2_spec))
+    noise_12CN_1 = 1.4826 * np.median(
+        np.abs(noise_12CN_1_spec - np.median(noise_12CN_1_spec))
     )
+    # noise_12CN_2_spec = np.concatenate(
+    #    [data_12CN_2[0 : data_ranges[1][0], 1], data_12CN_2[data_ranges[1][1] : -1, 1]]
+    # )
+    # noise_12CN_2 = 1.4826 * np.median(
+    #    np.abs(noise_12CN_2_spec - np.median(noise_12CN_2_spec))
+    # )
     noise_13CN_spec = np.concatenate(
         [data_13CN[0 : data_ranges[2][0], 1], data_13CN[data_ranges[2][1] : -1, 1]]
     )
@@ -89,15 +93,22 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
         np.abs(noise_13CN_spec - np.median(noise_13CN_spec))
     )
 
+    # Adjust for system temp (from ALMA sens. calc.) and bandwidth
+    noise_12CN_2 = (
+        noise_12CN_1
+        * 101.871
+        / 105.414
+        * np.sqrt(
+            (data_12CN_1[1, 0] - data_12CN_1[0, 0])
+            / (data_12CN_2[1, 0] - data_12CN_2[0, 0])
+        )
+    )
+
     # save data
     data = {}
     labels = ["12CN_1", "12CN_2", "13CN"]
     data_specs = [data_12CN_1, data_12CN_2, data_13CN]
-    noises = [
-        noise_13CN,
-        noise_12CN_2,
-        noise_13CN,
-    ]  # assume 13CN noise because 12CN_1 noise is hard to measure
+    noises = [noise_12CN_1, noise_12CN_2, noise_13CN]
     ylabels = [r"CN $T_B$ (K)", r"CN $T_B$ (K)", r"$^{13}$CN $T_B$ (K)"]
 
     for label, data_spec, noise, data_range, ylabel in zip(
@@ -146,9 +157,9 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
             clip_tau=-10.0,
             prior_fwhm_L=None,
             prior_ripple_wavenumber={
-                "12CN_1": [5, 1],
-                "12CN_2": [5, 1],
-                "13CN": [5, 1],
+                "12CN_1": [2.0, 5.0],
+                "12CN_2": [2.0, 5.0],
+                "13CN": [2.0, 5.0],
             },
         )
         model.add_likelihood()

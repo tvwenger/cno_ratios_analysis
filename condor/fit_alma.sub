@@ -6,7 +6,7 @@ ODIR = osdf:///ospool/ap40/data/trey.wenger
 DIR = /home/trey.wenger/cno_ratios_analysis
 
 # Container
-container_image = $(ODIR)/bayes_hfs_v1.1.3.sif
+container_image = $(ODIR)/bayes_hfs_v1.1.4.sif
 
 # Executable
 executable = $(DIR)/condor/run_fit_alma.sh
@@ -27,7 +27,7 @@ stream_error = True
 
 # Resource request
 request_cpus = 8
-request_memory = 16GB
-request_disk = 16GB
+request_memory = 24GB
+request_disk = 24GB
 
 queue source from $(DIR)/data/alma_sources.txt
