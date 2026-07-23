@@ -19,9 +19,9 @@ transfer_input_files = $(DIR)/scripts/fit_alma.py,$(DIR)/data/bayes_hfs_alma_pri
 transfer_output_remaps = "$(source)_n$(n)_results.pkl = $(ODIR)/results/$(out)/$(source)_n$(n)_results.pkl"
 
 # Logging
-log = $(DIR)/logs/alma_$(Cluster)_$(Process).log
-error = $(DIR)/logs/alma_$(Cluster)_$(Process).err
-output = $(DIR)/logs/alma_$(Cluster)_$(Process).out
+log = $(DIR)/logs/$(out)/alma_$(Cluster)_$(Process).log
+error = $(DIR)/logs/$(out)/alma_$(Cluster)_$(Process).err
+output = $(DIR)/logs/$(out)/alma_$(Cluster)_$(Process).out
 stream_output = True
 stream_error = True
 
