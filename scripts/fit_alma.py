@@ -157,9 +157,9 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
             clip_tau=-10.0,
             prior_fwhm_L=None,
             prior_ripple_wavenumber={
-                "12CN_1": [2.0, 5.0],
-                "12CN_2": [2.0, 5.0],
-                "13CN": [2.0, 5.0],
+                "12CN_1": [3.0, 10.0],
+                "12CN_2": [3.0, 10.0],
+                "13CN": [3.0, 10.0],
             },
         )
         model.add_likelihood()
