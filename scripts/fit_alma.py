@@ -1,13 +1,12 @@
 """fit_alma.py
 Fit bayes_hfs models to ALMA CN data.
-Trey V. Wenger - June 2026
+Trey V. Wenger - July 2026
 """
 
 import sys
 import pickle
 
 import numpy as np
-import pandas as pd
 
 import pymc as pm
 import bayes_spec
@@ -15,8 +14,7 @@ import bayes_hfs
 
 import cloudpickle as cpickle
 
-from astropy.io import fits
-import astropy.constants as c
+from scipy.stats import sigmaclip
 
 from bayes_spec import SpecData
 from bayes_hfs import supplement_molecule_data, HFSRatioModel
@@ -74,21 +72,11 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
     data_13CN = data_13CN[~np.isnan(data_13CN).any(axis=1)]
 
     # estimate noise
-    noise_12CN_1_spec = np.concatenate(
-        [data_12CN_1[0 : data_ranges[0][0], 1], data_12CN_1[data_ranges[0][1] : -1, 1]]
-    )
+    noise_12CN_1_spec = sigmaclip(data_12CN_1[:, 1], low=3.0, high=3.0)[0]
     noise_12CN_1 = 1.4826 * np.median(
         np.abs(noise_12CN_1_spec - np.median(noise_12CN_1_spec))
     )
-    # noise_12CN_2_spec = np.concatenate(
-    #    [data_12CN_2[0 : data_ranges[1][0], 1], data_12CN_2[data_ranges[1][1] : -1, 1]]
-    # )
-    # noise_12CN_2 = 1.4826 * np.median(
-    #    np.abs(noise_12CN_2_spec - np.median(noise_12CN_2_spec))
-    # )
-    noise_13CN_spec = np.concatenate(
-        [data_13CN[0 : data_ranges[2][0], 1], data_13CN[data_ranges[2][1] : -1, 1]]
-    )
+    noise_13CN_spec = sigmaclip(data_13CN[:, 1], low=3.0, high=3.0)[0]
     noise_13CN = 1.4826 * np.median(
         np.abs(noise_13CN_spec - np.median(noise_13CN_spec))
     )
@@ -149,17 +137,22 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
             prior_ratio=0.02,
             prior_fwhm2=3.0,
             prior_velocity=prior_velocity,
-            prior_log10_Tex_CTEX=[0.5, 0.1],
+            prior_log10_Tex_CTEX=[0.75, 0.25],
             assume_CTEX1=False,
             assume_CTEX2=True,
             prior_log10_CTEX_variance=[-4.0, 1.0],
             clip_weights=1.0e-9,
             clip_tau=-10.0,
             prior_fwhm_L=None,
+            prior_ripple_amplitude={
+                "12CN_1": 0.01,
+                "12CN_2": 1.0,
+                "13CN": 0.01,
+            },
             prior_ripple_wavenumber={
-                "12CN_1": [3.0, 10.0],
-                "12CN_2": [3.0, 10.0],
-                "13CN": [3.0, 10.0],
+                "12CN_1": [2.0, 3.0],
+                "12CN_2": [5.0, 15.0],
+                "13CN": [2.0, 3.0],
             },
         )
         model.add_likelihood()
@@ -211,6 +204,11 @@ if __name__ == "__main__":
                 data_ranges = np.array(parts[3:], dtype=int).reshape((3, 2))
     if prior_velocity is None:
         raise ValueError(f"{source} not found in bayes_hfs_alma_priors.txt")
+
+    # overwrite data ranges
+    data_ranges[0] = [0, -1]
+    data_ranges[1] = [1125, -575]
+    data_ranges[2] = [0, -1]
 
     project = "alma"
 
