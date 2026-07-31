@@ -72,11 +72,13 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
     data_13CN = data_13CN[~np.isnan(data_13CN).any(axis=1)]
 
     # estimate noise
-    noise_12CN_1_spec = sigmaclip(data_12CN_1[:, 1], low=3.0, high=3.0)[0]
+    noise_12CN_1_spec = np.concatenate([data_12CN_1[0:100, 1], data_12CN_1[-100:-1, 1]])
+    noise_12CN_1_spec = sigmaclip(noise_12CN_1_spec)[0]
     noise_12CN_1 = 1.4826 * np.median(
         np.abs(noise_12CN_1_spec - np.median(noise_12CN_1_spec))
     )
-    noise_13CN_spec = sigmaclip(data_13CN[:, 1], low=3.0, high=3.0)[0]
+    noise_13CN_spec = np.concatenate([data_13CN[0:100, 1], data_13CN[-100:-1, 1]])
+    noise_13CN_spec = sigmaclip(noise_13CN_spec)[0]
     noise_13CN = 1.4826 * np.median(
         np.abs(noise_13CN_spec - np.median(noise_13CN_spec))
     )
