@@ -22,8 +22,8 @@ transfer_output_remaps = "$(source)_n$(n)_results.pkl = $(ODIR)/results/$(out)/$
 log = $(DIR)/logs/$(out)/alma_$(Cluster)_$(Process).log
 error = $(DIR)/logs/$(out)/alma_$(Cluster)_$(Process).err
 output = $(DIR)/logs/$(out)/alma_$(Cluster)_$(Process).out
-stream_output = True
-stream_error = True
+stream_output = False
+stream_error = False
 
 # Resource request
 request_cpus = 8
