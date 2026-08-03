@@ -9,13 +9,13 @@ DIR = /home/trey.wenger/cno_ratios_analysis
 container_image = $(ODIR)/bayes_hfs_v1.1.4.sif
 
 # Executable
-executable = $(DIR)/condor/run_fit_alma.sh
+executable = $(DIR)/condor/run_fit_alma_ripples.sh
 arguments = $(source) $(n)
 
 # Data handling
 should_transfer_files = YES
 when_to_transfer_output = ON_EXIT
-transfer_input_files = $(DIR)/scripts/fit_alma.py,$(DIR)/data/bayes_hfs_alma_priors.txt,$(DIR)/data/mol_data_12CN.pkl,$(DIR)/data/mol_data_13CN.pkl,$(DIR)/data/mol_metadata_12CN.pkl,$(DIR)/data/mol_metadata_13CN.pkl,$(DIR)/data/alma.tar.gz
+transfer_input_files = $(DIR)/scripts/fit_alma_ripples.py,$(DIR)/data/bayes_hfs_alma_priors.txt,$(DIR)/data/mol_data_12CN.pkl,$(DIR)/data/mol_data_13CN.pkl,$(DIR)/data/mol_metadata_12CN.pkl,$(DIR)/data/mol_metadata_13CN.pkl,$(DIR)/data/alma.tar.gz
 transfer_output_remaps = "$(source)_n$(n)_results.pkl = $(ODIR)/results/$(out)/$(source)_n$(n)_results.pkl"
 
 # Logging

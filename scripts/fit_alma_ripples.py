@@ -130,6 +130,7 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
             Feff=1.0,
             n_clouds=n_clouds,
             baseline_degree=0,
+            ripples=True,
             seed=1234,
             verbose=True,
         )
@@ -145,6 +146,16 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
             clip_weights=1.0e-9,
             clip_tau=-10.0,
             prior_fwhm_L=None,
+            prior_ripple_amplitude={
+                "12CN_1": 0.01,
+                "12CN_2": 1.0,
+                "13CN": 0.01,
+            },
+            prior_ripple_wavenumber={
+                "12CN_1": [2.0, 3.0],
+                "12CN_2": [7.0, 11.0],
+                "13CN": [2.0, 3.0],
+            },
         )
         model.add_likelihood()
 

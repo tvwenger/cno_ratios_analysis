@@ -112,8 +112,8 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
             verbose=True,
         )
         model.add_priors(
-            prior_log10_Ntot1=[14.5, 0.5],
-            prior_ratio=0.1,
+            prior_log10_Ntot1=[13.5, 0.5],
+            prior_ratio=0.05,
             prior_fwhm2=1.0,
             prior_velocity=prior_velocity,
             prior_log10_Tex_CTEX=[0.75, 0.25],
@@ -136,14 +136,14 @@ def main(source, n_clouds, project, prior_velocity, data_ranges):
         }
         model.sample(
             init="advi+adapt_diag",
-            tune=1000,
+            tune=2000,
             draws=1000,
             chains=8,
             cores=8,
             n_init=200_000,
             init_kwargs={
-                "rel_tolerance": 0.01,
-                "abs_tolerance": 0.01,
+                "rel_tolerance": 0.005,
+                "abs_tolerance": 0.005,
                 "learning_rate": 0.001,
                 "start": {"velocity_norm": np.linspace(0.1, 0.9, n_clouds)},
             },
