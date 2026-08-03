@@ -28,6 +28,6 @@ stream_error = False
 request_cpus = 8
 request_memory = 24GB
 request_disk = 24GB
-+LongJob = true
++JobDurationCategory = "Long"
 
 queue source from $(DIR)/data/all_sources.txt
